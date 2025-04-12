@@ -1,0 +1,5 @@
+fname,lname,mname,dob,sex,ss,street,city,state,postal_code,country_code,phone_home,phone_cell,email,status,providerID,race,ethnicity
+Juan,Pérez,A,1985-05-15,M,123456789,Calle Principal 123,Ciudad de México,CDMX,12345,MX,5551234567,5559876543,juan.perez@ejemplo.com,active,1,white,not_hispanic
+María,González,B,1990-11-22,F,987654321,Avenida Revolución 456,Guadalajara,Jalisco,67890,MX,5551122334,5554433221,maria.gonzalez@ejemplo.com,active,1,native,hispanic
+Carlos,Sánchez,,1978-03-10,M,456789123,Boulevard Los Heroes 789,Monterrey,Nuevo León,54321,MX,5559988776,,carlos.sanchez@ejemplo.com,active,2,black,not_hispanic
+Ana,López,C,1995-07-30,F,321654987,Callejon del Beso 10,San Miguel de Allende,Guanajuato,45678,MX,,5556677889,ana.lopez@ejemplo.com,active,1,asian,hispanic

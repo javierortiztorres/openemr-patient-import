@@ -1,0 +1,108 @@
+<?php
+/**
+ * Process Patient Import
+ * @package OpenEMR 7.0.2
+ * @author Javier Ortiz Torres
+ */
+
+require_once("../../globals.php");
+require_once("$srcdir/patient.inc");
+require_once("$srcdir/headers.inc.php");
+require_once("$srcdir/acl.inc");
+require_once("$srcdir/options.inc.php");
+require_once("$srcdir/formdata.inc.php");
+require_once("$srcdir/formatting.inc.php");
+require_once("../../library/csv_import_functions.php");
+
+if (!acl_check('admin', 'super')) {
+    echo xlt("Access denied");
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
+    $delimiter = $_POST['delimiter'] ?? ',';
+    $has_header = isset($_POST['header_row']);
+    
+    $file = $_FILES['csv_file']['tmp_name'];
+    $handle = fopen($file, 'r');
+    
+    if ($handle === false) {
+        die(xlt("Error opening CSV file"));
+    }
+    
+    $success_count = 0;
+    $error_count = 0;
+    $errors = array();
+    $row_number = 0;
+    
+    while (($row = fgetcsv($handle, 1000, $delimiter)) !== false) {
+        $row_number++;
+        
+        if ($row_number === 1 && $has_header) {
+            continue;
+        }
+        
+        $patient_data = map_csv_to_patient($row);
+        $validation_result = validate_patient_data($patient_data);
+        
+        if ($validation_result['is_valid']) {
+            $pid = insert_patient($patient_data);
+            
+            if ($pid) {
+                $success_count++;
+            } else {
+                $error_count++;
+                $errors[] = xlt("Error in row") . " $row_number: " . xlt("Could not insert patient");
+            }
+        } else {
+            $error_count++;
+            $errors[] = xlt("Error in row") . " $row_number: " . $validation_result['message'];
+        }
+    }
+    
+    fclose($handle);
+    
+    ?>
+    <html>
+    <head>
+        <title><?php echo text(xlt('Import Results')); ?></title>
+        <?php Header::setupHeader(); ?>
+    </head>
+    <body>
+        <div class="container mt-3">
+            <h2><?php echo text(xlt('Import Results')); ?></h2>
+            
+            <div class="alert alert-<?php echo ($error_count > 0) ? 'warning' : 'success'; ?>">
+                <?php 
+                echo text(xlt('Patients imported successfully') . ": $success_count<br>");
+                echo text(xlt('Errors') . ": $error_count");
+                ?>
+            </div>
+            
+            <?php if (!empty($errors)) { ?>
+                <div class="card mb-4">
+                    <div class="card-header bg-danger text-white">
+                        <?php echo text(xlt('Detailed Errors')); ?>
+                    </div>
+                    <div class="card-body">
+                        <ul>
+                            <?php foreach ($errors as $error) { ?>
+                                <li><?php echo text($error); ?></li>
+                            <?php } ?>
+                        </ul>
+                    </div>
+                </div>
+            <?php } ?>
+            
+            <a href="patient_import.php" class="btn btn-primary">
+                <i class="fa fa-arrow-left"></i> <?php echo text(xlt('Back')); ?>
+            </a>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+header("Location: patient_import.php");
+exit;

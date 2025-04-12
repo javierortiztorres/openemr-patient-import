@@ -1,0 +1,170 @@
+<?php
+/**
+ * CSV Import Helper Functions
+ * @package OpenEMR 7.0.2
+ * @author Javier Ortiz Torres
+ */
+
+function map_csv_to_patient($row) {
+    return array(
+        'fname' => $row[0] ?? '',
+        'lname' => $row[1] ?? '',
+        'mname' => $row[2] ?? '',
+        'dob' => $row[3] ?? '',
+        'sex' => $row[4] ?? '',
+        'ss' => $row[5] ?? '',
+        'street' => $row[6] ?? '',
+        'city' => $row[7] ?? '',
+        'state' => $row[8] ?? '',
+        'postal_code' => $row[9] ?? '',
+        'country_code' => $row[10] ?? '',
+        'phone_home' => $row[11] ?? '',
+        'phone_cell' => $row[12] ?? '',
+        'email' => $row[13] ?? '',
+        'status' => $row[14] ?? 'active',
+        'providerID' => $row[15] ?? 1,
+        'race' => $row[16] ?? '',
+        'ethnicity' => $row[17] ?? ''
+    );
+}
+
+function validate_patient_data($patient_data) {
+    if (empty($patient_data['fname'])) {
+        return array('is_valid' => false, 'message' => xlt('First name is required'));
+    }
+    
+    if (empty($patient_data['lname'])) {
+        return array('is_valid' => false, 'message' => xlt('Last name is required'));
+    }
+    
+    if (!validate_date($patient_data['dob'])) {
+        return array('is_valid' => false, 'message' => xlt('Invalid birth date'));
+    }
+    
+    if (!in_array($patient_data['sex'], array('M', 'F', 'U'))) {
+        return array('is_valid' => false, 'message' => xlt('Invalid sex (must be M, F or U)'));
+    }
+    
+    return array('is_valid' => true, 'message' => '');
+}
+
+function insert_patient($patient_data) {
+    $patient_data['pubpid'] = generate_new_pubpid();
+    
+    $pid = sqlInsert(
+        "INSERT INTO patient_data SET " .
+        "pid = NULL, " .
+        "pubpid = ?, " .
+        "fname = ?, " .
+        "lname = ?, " .
+        "mname = ?, " .
+        "DOB = ?, " .
+        "sex = ?, " .
+        "ss = ?, " .
+        "status = ?",
+        array(
+            $patient_data['pubpid'],
+            $patient_data['fname'],
+            $patient_data['lname'],
+            $patient_data['mname'],
+            $patient_data['dob'],
+            $patient_data['sex'],
+            $patient_data['ss'],
+            $patient_data['status']
+        )
+    );
+    
+    if ($pid) {
+        // Insert address
+        sqlInsert(
+            "INSERT INTO addresses SET " .
+            "foreign_id = ?, " .
+            "line1 = ?, " .
+            "city = ?, " .
+            "state = ?, " .
+            "postal_code = ?, " .
+            "country_code = ?",
+            array(
+                $pid,
+                $patient_data['street'],
+                $patient_data['city'],
+                $patient_data['state'],
+                $patient_data['postal_code'],
+                $patient_data['country_code']
+            )
+        );
+        
+        // Insert phones
+        if (!empty($patient_data['phone_home'])) {
+            sqlInsert(
+                "INSERT INTO phone_numbers SET " .
+                "foreign_id = ?, " .
+                "type = 'home', " .
+                "number = ?",
+                array($pid, $patient_data['phone_home'])
+            );
+        }
+        
+        if (!empty($patient_data['phone_cell'])) {
+            sqlInsert(
+                "INSERT INTO phone_numbers SET " .
+                "foreign_id = ?, " .
+                "type = 'cell', " .
+                "number = ?",
+                array($pid, $patient_data['phone_cell'])
+            );
+        }
+        
+        // Insert email
+        if (!empty($patient_data['email'])) {
+            sqlInsert(
+                "INSERT INTO emails SET " .
+                "foreign_id = ?, " .
+                "type = 'primary', " .
+                "email = ?",
+                array($pid, $patient_data['email'])
+            );
+        }
+        
+        // Insert demographics
+        sqlInsert(
+            "INSERT INTO patient_demographics SET " .
+            "pid = ?, " .
+            "race = ?, " .
+            "ethnicity = ?, " .
+            "providerID = ?",
+            array(
+                $pid,
+                $patient_data['race'],
+                $patient_data['ethnicity'],
+                $patient_data['providerID']
+            )
+        );
+    }
+    
+    return $pid;
+}
+
+function generate_new_pubpid() {
+    $prefix = 'IMP' . date('Ymd');
+    $last_pubpid = sqlQuery(
+        "SELECT MAX(pubpid) as max_pubpid FROM patient_data WHERE pubpid LIKE ?",
+        array($prefix . '%')
+    )['max_pubpid'];
+    
+    if ($last_pubpid) {
+        $last_num = (int)substr($last_pubpid, strlen($prefix));
+        $new_num = $last_num + 1;
+    } else {
+        $new_num = 1;
+    }
+    
+    return $prefix . str_pad($new_num, 4, '0', STR_PAD_LEFT);
+}
+
+function validate_date($date) {
+    if (empty($date)) return false;
+    
+    $d = DateTime::createFromFormat('Y-m-d', $date);
+    return $d && $d->format('Y-m-d') === $date;
+}
